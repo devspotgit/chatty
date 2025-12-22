@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+:root{
+    --primary:hsl(240, 100%, 20%);
+    --primary-light:hsl(240, 100%, 40%);
+    --primary-lighter:hsl(240, 100%, 60%);
+    --primary-lighter-plus:hsl(240, 100%, 80%);
+}
+
+@keyframes notification {
+    
+    0%{
+        top:-400px;
+    }
+
+    30%{
+        top:20px;
+    }
+
+    70%{
+        top:20px;
+    }
+
+    100%{
+        top:-400px;
+    }
+}
+
+.notification-anim{
+    animation-name:notification;
+    animation-duration:4s;
+}
+
