@@ -6,14 +6,14 @@ import { getDatabase } from "firebase/database"
 import { getStorage } from "firebase/storage"
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCpjJP0FOb10iPzxiEpotk4dAPoY4uOU4w",
-  authDomain: "test-41110.firebaseapp.com",
-  databaseURL: "https://test-41110-default-rtdb.firebaseio.com",
-  projectId: "test-41110",
-  storageBucket: "test-41110.firebasestorage.app",
-  messagingSenderId: "726178530704",
-  appId: "1:726178530704:web:4682d04139c893f513df15",
-  measurementId: "G-19BS4XKJBT"
+  apiKey: import.meta.env.apiKey,
+  authDomain: import.meta.env.authDomain,
+  databaseURL: import.meta.env.databaseURL,
+  projectId: import.meta.env.projectId,
+  storageBucket: import.meta.env.storageBucket,
+  messagingSenderId: import.meta.env.messagingSenderId,
+  appId: import.meta.env.appId,
+  measurementId: import.meta.env.measurementId
 }
 
 const app = initializeApp(firebaseConfig)
