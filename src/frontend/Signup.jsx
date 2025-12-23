@@ -6,7 +6,7 @@ import { AppContext } from "./Context"
 
 function Signup(){
 
-    const [ isPasswordVisible, setPasswordVisibility ] = useState(false)
+    const [ isPasswordVisible, setPasswordVisibility, setLoadingVisibility ] = useState(false)
 
     const { page, setPage, setMessage, setMessageType } = useContext(AppContext)
 

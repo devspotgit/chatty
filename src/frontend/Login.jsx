@@ -8,15 +8,23 @@ function Login(){
 
     const [ isPasswordVisible, setPasswordVisibility ] = useState(false)
 
-    const { page, setPage, setMessage, setMessageType } = useContext(AppContext)
+    const { page, setPage, setMessage, setMessageType, setLoadingVisibility } = useContext(AppContext)
 
     function submit(e){
 
-        // setMessage("login")
-
-        // setMessageType("success")
-
         e.preventDefault()
+
+        // setLoadingVisibility(true)
+
+        // setTimeout(()=>{
+
+        //     setLoadingVisibility(false)
+
+        //     setMessage("login")
+
+        //     setMessageType("success")
+
+        // }, 2000)
     }
 
     return (
