@@ -1,158 +1,41 @@
 import { auth, db, rtdb, storage } from "./firebase_config.js"
 
-import { collection, getDocs, addDoc } from "firebase/firestore"
+import { collection, getDocs, addDoc, getDoc, doc, setDoc } from "firebase/firestore"
 
 import { ref, set, onValue } from "firebase/database"
 
+import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage"
 
-/* -------------------------- class Message --------------------------- */
-class Message{
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth"
 
-    constructor({ content, createdAt, senderId, receiverId }){
 
-        this.content = content
+const chatty = {
 
-        this.createdAt = createdAt
+    users: [],
 
-        this.senderId = senderId
+    currentUser: null,
 
-        this.receiverId = receiverId
-    }
-}
+    currentReceiver: null,
 
-/* -------------------------- class User --------------------------- */
-class User{
 
-    constructor({ username, profilePicture, userId, messages }){
-
-        this.username = username
-
-        this.profilePicture = profilePicture
-
-        this.userId = userId
-
-        this.messages = messages
-
-        this.isCurrentReceiver = false
-
-        this.nonReadMessages = 0
-
-        this.unsubscribe = null
-    }
-
-    getData(){
-
-        return {
-
-            username: this.username,
-
-            profilePicture: this.profilePicture,
-
-            userId: this.userId,
-
-            messages: this.messages
-
-            isCurrentReceiver: this.isCurrentReceiver
-
-            nonReadMessages: this.nonReadMessages
-
-            unsubscribe: this.unsubscribe
-        }
-    }
-}
-
-/* -------------------------- class App --------------------------- */
-class App{
-
-    constructor({ users, currentUser, currentReceiver }){
-
-        this.users = users
-
-        this.currentUser = currentUser
-
-        this.currentReceiver = currentReceiver
-    }
-
-    async addMessage(content){
-
-        const data = {
-
-            content,
-
-            createdAt: Date.now()
-
-            senderId: currentUser.userId,
-
-            receiverId: currentReceiver.userId
-        }
+    /* -------------------------------- signup ------------------------------ */
+    async signup(email, password){
 
         try{
 
-            await addDoc(collection(db, "messages"), data)
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password)
 
-            await set(ref(rtdb, "users/" + currentUser.userId))
-
-            this.currentReceiver.messages.push(new Message(data))
-
-            return new User(this.currentReceiver.getData())
+            return userCredential
         }
-
         catch(error){
 
             return Promise.reject(error)
         }
-    }
+    },
 
 
-    listenMessage(callBack){
-
-        this.users.forEach(user => {
-
-            user.unsubscribe = onValue(ref(rtdb, "users/" + userId), (snapshot)=>{
-
-                const data = snapshot.val()
-
-                if(data.receiverId == this.currentUser.userId){
-
-                    if(data.senderId == this.currentReceiver.userId){
-
-                        user.messages.push(new Message(data))
-
-                        callback(null, new User(user.getData()))
-
-                    }
-                    else{
-
-                        user.messages.push(new Message(data))
-
-                        user.nonReadMessages ++
-
-                        callBack([...this.users])
-                    }
-                }
-            })
-        })
-    }
-
-  
-    changeReceiver(receiverId){
-
-
-
-    }
-
-
-
-    async static init(){
-
-        const data = {
-
-            users: [],
-
-            currentUser: null,
-
-            currentReceiver = null
-        }
+    /* -------------------------------- initialize app ------------------------------ */
+    async initApp(){
 
         try{
 
@@ -176,13 +59,13 @@ class App{
     
                         const messageData = messageDoc.data()                    
     
-                        if(messageData.senderId == currentUserId && messageData.receiverId == userId){
+                        if((messageData.senderId == currentUserId && messageData.receiverId == userId) || (messageData.senderId == userId && messageData.receiverId == currentUserId)){
     
-                            messages.push(new Message(messageData))
+                            messages.push(messageData)
                         }
                     })
     
-                    data.users.push(new User({ ...userData, messages }))
+                    this.users.push({...userData, isCurrentReceiver: false, nonReadMessage: 0, unsubscribeMessage: null, unsubscribeImage: null, messages})
                 }
             })
     
@@ -194,19 +77,233 @@ class App{
     
                 if(userId == currentUserId){
     
-                    data.currentUser = new User( { ...userData, messages: null } )
+                    this.currentUser = userData
                 }
             })
     
-            return new App(data)
+            return {isActivated: true, users: this.users, currentUser: this.currentUser, currentReceiver: this.currentReceiver}
         }
-
         catch(error){
 
             return Promise.reject(error)
         }
+    },
+
+
+    /* -------------------------------- login ------------------------------ */
+    async login(email, password){
+
+        try{
+
+            const userCredential = await signInWithEmailAndPassword(auth, email, password)
+
+            const userDoc = await getDoc(doc(db, "users", userCredential.user.uid))
+
+            if(userDoc.exists()){
+
+                const data = await this.initApp()
+
+                return data
+            }
+            else{
+
+                return { isActivated: false}
+            }
+        }
+        catch(error){
+
+            return Promise.reject(error)
+        }
+    },
+
+
+    /* -------------------------------- activation ------------------------------ */
+    async activation(username, profilePictureFile){
+
+        try{
+            
+            const currentUserId = auth.currentUser.uid
+    
+            const snapshot = await uploadBytes(storageRef(storage, "images/" + currentUserId + "/pic"), profilePictureFile)
+    
+            const url = await getDownloadURL(snapshot.ref)
+    
+            await setDoc(doc(db, "users", currentUserId), {
+    
+                userId: currentUserId,
+    
+                username: username,
+    
+                profilePicture: url
+            })
+
+            const data = await this.initApp()
+
+            return data
+        }
+        catch(error){
+
+            return Promise.reject(error)
+        }
+    },
+
+
+    /* -------------------------------- add message ------------------------------ */
+    async addMessage (content){
+
+        const data = {
+
+            content: content,
+
+            createdAt: Date.now(),
+
+            receiverId: this.currentReceiver.userId
+        }
+
+        try{
+
+            await addDoc(collection(db, "messages"), data)
+
+            await set(ref(rtdb, "users/" + this.currentUser.userId + "/message"), data)
+
+            this.currentReceiver.messages.push(data)
+
+            return {...this.currentReceiver}
+        }
+        catch(error){
+
+            return Promise.reject(error)
+        }
+    },
+
+
+    /* -------------------------------- event on new message ------------------------------ */
+    onMessage(callback){
+
+        this.users.forEach(user => {
+
+            user.unsubscribeMessage = onValue(ref(rtdb, "users/" + user.userId + "/message"), (snapshot)=>{
+
+                const data = snapshot.val()
+
+                if(data.receiverId == this.currentUser.userId){
+
+                    if(user.userId == this.currentReceiver.userId){
+
+                        user.messages.push(data)
+
+                        callback({users:[...this.users], currentReceiver:{...this.currentReceiver}, sender:user.username })
+                    }
+                    else{
+
+                        user.messages.push(data)
+
+                        user.nonReadMessages ++
+
+                        callback({users:[...this.users], currentReceiver:{...this.currentReceiver}, sender:user.username})
+                    }
+                }
+            })
+        })
+    },
+
+
+    /* ------------------------------ event on picture profile change ------------------------------ */
+    onImage(callback){
+
+        this.users.forEach(user => {
+
+            user.unsubscribeImage = onValue(ref(rtdb, "users/" + user.userId + "/image"), (snapshot)=>{
+
+                const data = snapshot.val()
+
+                user.profilePicture = data.url
+
+                callback({users:[...this.users], currentReceiver:{...this.currentReceiver}})
+            })
+        })
+    },
+
+
+    /* ------------------------------ update profile picture ------------------------------ */
+    async updateProfilePicture(profilePictureFile){
+
+        try{
+
+            const currentUserId = this.currentUser.userId
+        
+            const snapshot = await uploadBytes(storageRef(storage, "images/" + currentUserId + "/pic"), profilePictureFile)
+        
+            const url = await getDownloadURL(snapshot.ref)
+        
+            await setDoc(doc(db, "users", currentUserId), {
+    
+                userId: currentUserId,
+    
+                username: this.currentUser.username,
+    
+                profilePicture: url
+            })
+
+            await set(ref(rtdb, "users/" + currentUserId + "/image"), {url})
+
+            this.currentUser.profilePicture = url
+
+            return {currentUser: {...this.currentUser}}
+        }
+        catch(error){
+
+            return Promise.reject(error)
+        }
+    },
+
+
+    /* ------------------------------ change receiver ------------------------------ */
+    changeReceiver(receiverId){
+
+        if(this.currentReceiver != null){
+
+            this.currentReceiver.isCurrentReceiver = false
+        }
+
+        this.currentReceiver = this.users.find(user => user.userId == receiverId)
+
+        this.currentReceiver.isCurrentReceiver = true
+
+        this.currentReceiver.nonReadMessages = 0
+
+        return { users: [...this.users], currentReceiver: {...this.currentReceiver}}
+    },
+
+
+    /* ------------------------------ search user ------------------------------ */
+    searchUser(username){
+
+        const users = []
+
+        if(username.trim() != ""){
+
+            this.users.forEach(user => {
+    
+                if(user.username.includes(username.trim())) users.push(user)
+            })
+    
+            return users
+        }
+        else{
+
+            return []
+        }
     }
+
+    
+
 }
+
+
+export default chatty
+
+
 
 
 

@@ -1,5 +1,4 @@
 
-
 import { useState } from "react"
 
 
@@ -8,8 +7,6 @@ function Activation(){
     function submit(e){
 
         e.preventDefault()
-
-        console.log(c.getx())
     }
 
     const [profilePicture, setProfilePicture] = useState("/images/avatar.png")

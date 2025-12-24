@@ -13,18 +13,6 @@ function Login(){
     function submit(e){
 
         e.preventDefault()
-
-        // setLoadingVisibility(true)
-
-        // setTimeout(()=>{
-
-        //     setLoadingVisibility(false)
-
-        //     setMessage("login")
-
-        //     setMessageType("success")
-
-        // }, 2000)
     }
 
     return (

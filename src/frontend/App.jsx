@@ -23,8 +23,8 @@ function App() {
       {/* <Signup />
       <Login />
       <Notification />
-      <Loading /> */}
-      <Activation />
+      <Loading />
+      <Activation /> */}
     </AppContext.Provider>
   )
 }
