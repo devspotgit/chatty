@@ -3,29 +3,56 @@ import { IoEyeOutline } from "react-icons/io5"
 import { PiEyeSlashLight } from "react-icons/pi"
 import { useState, useContext } from "react"
 import { AppContext } from "./Context"
+import chatty from "./../backend/lib.js"
+
 
 function Signup(){
 
-    const [ isPasswordVisible, setPasswordVisibility, setLoadingVisibility ] = useState(false)
+    const [ isPasswordVisible, setPasswordVisibility] = useState(false)
 
-    const { page, setPage, setMessage, setMessageType } = useContext(AppContext)
+    const { page, setPage, setMessage, setMessageType, setLoadingVisibility } = useContext(AppContext)
 
     function submit(e){
 
         e.preventDefault()
+
+        const formData = new FormData(e.target)
+
+        chatty.signup(formData.get("signupEmail"), formData.get("signupPassword"))
+        
+        .then(res => {
+
+            setLoadingVisibility(false)
+
+            setMessage("account created, login now")
+
+            setMessageType("success")
+
+            setPage(res.action)
+        })
+        .catch(error =>{
+
+            setLoadingVisibility(false)
+
+            setMessage(error.code)
+
+            setMessageType("error")
+        })
+
+        setLoadingVisibility(true)
     }
 
     return (
         <form className={"flex-col gap-[20px] p-[20px] bg-(--primary-lighter-plus) rounded-[10px] " + (page != "signup" ? "hidden" : "flex")} onSubmit={submit}>
             <span className="font-bold text-center text-[1.5rem] text-(--primary)">Sign Up</span>
             <div className="flex flex-col gap-[15px]">
-                <label className="text-(--primary-light) text-[0.8rem] font-bold" for="signupEail">Email</label>
-                <input className="p-[10px] focus:outline-[0px] text-white bg-(--primary-lighter) rounded-[5px] placeholder:text-white" type="text" placeholder="Email" name="email" id="signupEmail" />
+                <label className="text-(--primary-light) text-[0.8rem] font-bold" for="signupEmail">Email</label>
+                <input className="p-[10px] focus:outline-[0px] text-white bg-(--primary-lighter) rounded-[5px] placeholder:text-white" type="text" placeholder="Email" name="signupEmail" id="signupEmail" />
             </div>
             <div className="flex flex-col gap-[15px]">
                 <label className="text-[0.8rem] text-(--primary-light) font-bold" for="signupPassword">Password</label>
                 <div className="flex flex-row gap-[10px] bg-(--primary-lighter) p-[10px] rounded-[5px]">
-                    <input className="text-white placeholder:text-white focus:outline-[0px]" type={isPasswordVisible ? "text" : "password"} placeholder="Password" name="password" id="signupPassword" />
+                    <input className="text-white placeholder:text-white focus:outline-[0px]" type={isPasswordVisible ? "text" : "password"} placeholder="Password" name="signupPassword" id="signupPassword" />
                     <button className={"cursor-pointer text-white " + (isPasswordVisible ? "hidden" : "")}   type="button" onClick={() => setPasswordVisibility(!isPasswordVisible)}><IoEyeOutline /></button>
                     <button className={"cursor-pointer text-white " + (isPasswordVisible ? "" : "hidden")} type="button" onClick={() => setPasswordVisibility(!isPasswordVisible)}><PiEyeSlashLight /></button>
                 </div>

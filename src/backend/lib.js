@@ -1,6 +1,6 @@
 import { auth, db, rtdb, storage } from "./firebase_config.js"
 
-import { collection, getDocs, addDoc, getDoc, doc, setDoc } from "firebase/firestore"
+import { collection, getDocs, addDoc, getDoc, doc, setDoc, query, where } from "firebase/firestore"
 
 import { ref, set, onValue } from "firebase/database"
 
@@ -23,9 +23,9 @@ const chatty = {
 
         try{
 
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+            await createUserWithEmailAndPassword(auth, email, password)
 
-            return userCredential
+            return {action: "login", data: null}
         }
         catch(error){
 
@@ -39,49 +39,65 @@ const chatty = {
 
         try{
 
-            const currentUserId = auth.currentUser.uid
-    
-            const userDocs = await getDocs(collection(db, "users"))
-    
-            const messageDocs = await getDocs(collection(db, "messages"))
+            if(auth.currentUser){ //user login
 
-            userDocs.forEach(userDoc => {
-    
-                const userData = userDoc.data()
-    
-                const userId = userDoc.id
-    
-                if(userId != currentUserId){
-    
-                    const messages = []
-    
-                    messageDocs.forEach(messageDoc => {
-    
-                        const messageData = messageDoc.data()                    
-    
-                        if((messageData.senderId == currentUserId && messageData.receiverId == userId) || (messageData.senderId == userId && messageData.receiverId == currentUserId)){
-    
-                            messages.push(messageData)
+                const currentUserId = auth.currentUser.uid
+
+                const userDoc = await getDoc(doc(db, "users", currentUserId))
+
+                if(userDoc.exists()){ //user activated
+
+                    const userDocs = await getDocs(collection(db, "users"))
+        
+                    const messageDocs = await getDocs(collection(db, "messages"))
+        
+                    userDocs.forEach(userDoc => {
+            
+                        const userData = userDoc.data()
+            
+                        const userId = userDoc.id
+            
+                        if(userId != currentUserId){
+            
+                            const messages = []
+            
+                            messageDocs.forEach(messageDoc => {
+            
+                                const messageData = messageDoc.data()                    
+            
+                                if((messageData.senderId == currentUserId && messageData.receiverId == userId) || (messageData.senderId == userId && messageData.receiverId == currentUserId)){
+            
+                                    messages.push(messageData)
+                                }
+                            })
+            
+                            this.users.push({...userData, isCurrentReceiver: false, nonReadMessage: 0, unsubscribeMessage: null, unsubscribeImage: null, messages})
                         }
                     })
-    
-                    this.users.push({...userData, isCurrentReceiver: false, nonReadMessage: 0, unsubscribeMessage: null, unsubscribeImage: null, messages})
+            
+                    userDocs.forEach(userDoc => {
+            
+                        const userData = userDoc.data()
+            
+                        const userId = userDoc.id
+            
+                        if(userId == currentUserId){
+            
+                            this.currentUser = userData
+                        }
+                    })
+            
+                    return {action: "userspace", data: {users: this.users, currentUser: this.currentUser, currentReceiver: this.currentReceiver}}
                 }
-            })
-    
-            userDocs.forEach(userDoc => {
-    
-                const userData = userDoc.data()
-    
-                const userId = userDoc.id
-    
-                if(userId == currentUserId){
-    
-                    this.currentUser = userData
+                else{ //user login, but not activated
+
+                    return {action: "activation", data: null}
                 }
-            })
-    
-            return {isActivated: true, users: this.users, currentUser: this.currentUser, currentReceiver: this.currentReceiver}
+            }
+            else{ //user not login
+
+                return {action: "login", data: null}
+            }
         }
         catch(error){
 
@@ -95,20 +111,11 @@ const chatty = {
 
         try{
 
-            const userCredential = await signInWithEmailAndPassword(auth, email, password)
+            await signInWithEmailAndPassword(auth, email, password)
 
-            const userDoc = await getDoc(doc(db, "users", userCredential.user.uid))
+            const res = await this.initApp()
 
-            if(userDoc.exists()){
-
-                const data = await this.initApp()
-
-                return data
-            }
-            else{
-
-                return { isActivated: false}
-            }
+            return res
         }
         catch(error){
 
@@ -123,6 +130,12 @@ const chatty = {
         try{
             
             const currentUserId = auth.currentUser.uid
+
+            const q = query(collection(db, "users"), where("username", "==", username))
+
+            const qResult = await getDocs(q)
+
+            if(qResult.docs.length != 0) throw {code: "username already exists"}
     
             const snapshot = await uploadBytes(storageRef(storage, "images/" + currentUserId + "/pic"), profilePictureFile)
     
@@ -137,9 +150,9 @@ const chatty = {
                 profilePicture: url
             })
 
-            const data = await this.initApp()
+            const res = await this.initApp()
 
-            return data
+            return res
         }
         catch(error){
 
