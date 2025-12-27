@@ -3,7 +3,6 @@ import Login from "./Login"
 import Signup from "./Signup"
 import Notification from "./Notification"
 import Loading from "./Loading"
-import Activation from "./Activation"
 import Userspace from "./Userspace"
 import { AppContext } from "./Context"
 import { useState, useEffect }  from "react"
@@ -23,37 +22,36 @@ function App() {
 
   const [currentReceiver, setCurrentReceiver] = useState(null)
 
-  const [users, setUsers] = useState(null)
+  const [users, setUsers] = useState([])
 
   const [search, setSearch] = useState(null)
 
   
   useEffect(()=>{
 
-    setTimeout(()=>{
+    chatty.onAuthChange({
+      
+      userLogin:({users, currentUser, currentReceiver})=>{
 
-      chatty.initApp()
+        setUsers(users)
 
-      .then(res => {
+        setCurrentReceiver(currentReceiver)
 
-        if(res.data){
+        setCurrentUser(currentUser)
 
-          setCurrentReceiver(res.data.currentReceiver)
+        setPage("userspace")
+      },
 
-          setCurrentUser(res.data.currentUser)
+      userLogout:()=>{
 
-          setUsers(res.data.users)
+        setPage("login")
+      },
 
-          setPage(res.action)
-        }
-        else{
+      errorHandler:(error)=>{
 
-          setPage(res.action)
-        }
-
-      })
-
-    }, 500)
+        console.log(error)
+      }
+    })
 
   }, [])
 
@@ -64,7 +62,6 @@ function App() {
       <Login />
       <Notification />
       <Loading />
-      <Activation />
       <Userspace />
     </AppContext.Provider>
   )

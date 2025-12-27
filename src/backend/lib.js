@@ -6,7 +6,7 @@ import { ref, set, onValue } from "firebase/database"
 
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage"
 
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth"
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth"
 
 
 const chatty = {
@@ -18,148 +18,114 @@ const chatty = {
     currentReceiver: null,
 
 
-    /* -------------------------------- signup ------------------------------ */
-    async signup(email, password){
+    /* -------------------------------- logout ------------------------------ */
+    logout(){
 
-        try{
+        this.users = []
 
-            await createUserWithEmailAndPassword(auth, email, password)
+        this.currentReceiver = null
 
-            return {action: "login", data: null}
-        }
-        catch(error){
+        this.currentUser = null
 
-            return Promise.reject(error)
-        }
+        return signOut(auth)
     },
 
 
-    /* -------------------------------- initialize app ------------------------------ */
-    async initApp(){
+    /* -------------------------------- signup ------------------------------ */
+    signup(email, password){
 
-        try{
-
-            if(auth.currentUser){ //user login
-
-                const currentUserId = auth.currentUser.uid
-
-                const userDoc = await getDoc(doc(db, "users", currentUserId))
-
-                if(userDoc.exists()){ //user activated
-
-                    const userDocs = await getDocs(collection(db, "users"))
-        
-                    const messageDocs = await getDocs(collection(db, "messages"))
-        
-                    userDocs.forEach(userDoc => {
-            
-                        const userData = userDoc.data()
-            
-                        const userId = userDoc.id
-            
-                        if(userId != currentUserId){
-            
-                            const messages = []
-            
-                            messageDocs.forEach(messageDoc => {
-            
-                                const messageData = messageDoc.data()                    
-            
-                                if((messageData.senderId == currentUserId && messageData.receiverId == userId) || (messageData.senderId == userId && messageData.receiverId == currentUserId)){
-            
-                                    messages.push(messageData)
-                                }
-                            })
-            
-                            this.users.push({...userData, isCurrentReceiver: false, nonReadMessage: 0, unsubscribeMessage: null, unsubscribeImage: null, messages})
-                        }
-                    })
-            
-                    userDocs.forEach(userDoc => {
-            
-                        const userData = userDoc.data()
-            
-                        const userId = userDoc.id
-            
-                        if(userId == currentUserId){
-            
-                            this.currentUser = userData
-                        }
-                    })
-            
-                    return {action: "userspace", data: {users: this.users, currentUser: this.currentUser, currentReceiver: this.currentReceiver}}
-                }
-                else{ //user login, but not activated
-
-                    return {action: "activation", data: null}
-                }
-            }
-            else{ //user not login
-
-                return {action: "login", data: null}
-            }
-        }
-        catch(error){
-
-            return Promise.reject(error)
-        }
+        return  createUserWithEmailAndPassword(auth, email, password)
     },
 
 
     /* -------------------------------- login ------------------------------ */
-    async login(email, password){
+    login(email, password){
 
-        try{
-
-            await signInWithEmailAndPassword(auth, email, password)
-
-            const res = await this.initApp()
-
-            return res
-        }
-        catch(error){
-
-            return Promise.reject(error)
-        }
+        return  signInWithEmailAndPassword(auth, email, password)
     },
 
 
-    /* -------------------------------- activation ------------------------------ */
-    async activation(username, profilePictureFile){
+    /* -------------------------------- auth change ------------------------------ */
+    onAuthChange({userLogin, userLogout, errorHandler}){
+
+        onAuthStateChanged(auth, user => {
+
+            if(user){
+
+                this.init({user, userLogin, errorHandler})
+            }
+            else{
+
+                this.init({userLogout, errorHandler})
+            }
+        })
+    },
+
+
+    /* -------------------------------- initialize app ------------------------------ */
+    async init({user, userLogin, userLogout, errorHandler}){
 
         try{
-            
-            const currentUserId = auth.currentUser.uid
 
-            const q = query(collection(db, "users"), where("username", "==", username))
+            if(user){ 
 
-            const qResult = await getDocs(q)
+                const userDoc = await getDoc(doc(db, "users", user.uid))
 
-            if(qResult.docs.length != 0) throw {code: "username already exists"}
-    
-            const snapshot = await uploadBytes(storageRef(storage, "images/" + currentUserId + "/pic"), profilePictureFile)
-    
-            const url = await getDownloadURL(snapshot.ref)
-    
-            await setDoc(doc(db, "users", currentUserId), {
-    
-                userId: currentUserId,
-    
-                username: username,
-    
-                profilePicture: url
-            })
+                if(!userDoc.exists()){
 
-            const res = await this.initApp()
+                    await setDoc(doc(db, "users", user.uid), {
 
-            return res
+                        id: user.uid,
+
+                        email: user.email,
+
+                        avatar: null
+                    })
+                }
+    
+                const userDocs = await getDocs(collection(db, "users"))
+    
+                const messageDocs = await getDocs(collection(db, "messages"))
+        
+                userDocs.forEach(userDoc => {
+    
+                    if(userDoc.id != user.uid){
+        
+                        const messages = []
+        
+                        messageDocs.forEach(messageDoc => {                 
+        
+                            if((messageDoc.data().sender == user.uid && messageDoc.data().receiver == userDoc.id) || (messageDoc.data().sender == userDoc.id && messageDoc.data().receiver == user.uid)){
+        
+                                messages.push(messageDoc.data())
+                            }
+                        })
+        
+                        this.users.push({...userDoc.data(), isCurrentReceiver: false, nonReadMessage: 0, unsubscribeMessage: null, unsubscribeImage: null, lastMessage: "my mesage, there are some messages you don't want to hear my friend", messages})
+                    }
+                })
+        
+                userDocs.forEach(userDoc => {
+        
+        
+                    if(user.uid == userDoc.id){
+        
+                        this.currentUser = userDoc.data()
+                    }
+                })
+
+                userLogin({users: this.users, currentUser: this.currentUser, currentReceiver: this.currentReceiver})
+            }
+            else{ 
+
+                userLogout()
+            }
         }
         catch(error){
 
-            return Promise.reject(error)
+            errorHandler(error)
         }
     },
-
 
     /* -------------------------------- add message ------------------------------ */
     async addMessage (content){
@@ -170,14 +136,16 @@ const chatty = {
 
             createdAt: Date.now(),
 
-            receiverId: this.currentReceiver.userId
+            receiver: this.currentReceiver.id,
+
+            sender: this.currentUser.id
         }
 
         try{
 
             await addDoc(collection(db, "messages"), data)
 
-            await set(ref(rtdb, "users/" + this.currentUser.userId + "/message"), data)
+            await set(ref(rtdb, "users/" + this.currentUser.id + "/message"), data)
 
             this.currentReceiver.messages.push(data)
 
@@ -195,17 +163,19 @@ const chatty = {
 
         this.users.forEach(user => {
 
-            user.unsubscribeMessage = onValue(ref(rtdb, "users/" + user.userId + "/message"), (snapshot)=>{
+            user.unsubscribeMessage = onValue(ref(rtdb, "users/" + user.id + "/message"), (snapshot)=>{
 
                 const data = snapshot.val()
 
-                if(data.receiverId == this.currentUser.userId){
+                if(data.receiver == this.currentUser.id){
 
-                    if(user.userId == this.currentReceiver.userId){
+                    if(user.id == this.currentReceiver.id){
 
                         user.messages.push(data)
 
-                        callback({users:[...this.users], currentReceiver:{...this.currentReceiver}, sender:user.username })
+                        this.currentReceiver.lastMessage = data.content
+
+                        callback({users:[...this.users], currentReceiver:{...this.currentReceiver}, sender:user.email})
                     }
                     else{
 
@@ -213,7 +183,9 @@ const chatty = {
 
                         user.nonReadMessages ++
 
-                        callback({users:[...this.users], currentReceiver:{...this.currentReceiver}, sender:user.username})
+                        user.lastMessage = data.content
+
+                        callback({users:[...this.users], currentReceiver:{...this.currentReceiver}, sender:user.email})
                     }
                 }
             })
@@ -221,16 +193,16 @@ const chatty = {
     },
 
 
-    /* ------------------------------ event on picture profile change ------------------------------ */
-    onImage(callback){
+    /* ------------------------------ event on avatar change ------------------------------ */
+    onAvatarChange(callback){
 
         this.users.forEach(user => {
 
-            user.unsubscribeImage = onValue(ref(rtdb, "users/" + user.userId + "/image"), (snapshot)=>{
+            user.unsubscribeImage = onValue(ref(rtdb, "users/" + user.id + "/avatar"), (snapshot)=>{
 
                 const data = snapshot.val()
 
-                user.profilePicture = data.url
+                user.avatar = data.url
 
                 callback({users:[...this.users], currentReceiver:{...this.currentReceiver}})
             })
@@ -238,29 +210,29 @@ const chatty = {
     },
 
 
-    /* ------------------------------ update profile picture ------------------------------ */
-    async updateProfilePicture(profilePictureFile){
+    /* ------------------------------ update avatar ------------------------------ */
+    async updateAvatar(avatar){
 
         try{
 
-            const currentUserId = this.currentUser.userId
+            const currentUserId = this.currentUser.id
         
-            const snapshot = await uploadBytes(storageRef(storage, "images/" + currentUserId + "/pic"), profilePictureFile)
+            const snapshot = await uploadBytes(storageRef(storage, "users/" + currentUserId + "/avatar/avatar_img"), avatar)
         
             const url = await getDownloadURL(snapshot.ref)
         
             await setDoc(doc(db, "users", currentUserId), {
     
-                userId: currentUserId,
+                id: currentUserId,
     
-                username: this.currentUser.username,
+                email: this.currentUser.email,
     
-                profilePicture: url
+                avatar: url
             })
 
-            await set(ref(rtdb, "users/" + currentUserId + "/image"), {url})
+            await set(ref(rtdb, "users/" + currentUserId + "/avatar"), {url})
 
-            this.currentUser.profilePicture = url
+            this.currentUser.avatar = url
 
             return {currentUser: {...this.currentUser}}
         }
@@ -272,14 +244,14 @@ const chatty = {
 
 
     /* ------------------------------ change receiver ------------------------------ */
-    changeReceiver(receiverId){
+    changeReceiver(receiver){
 
         if(this.currentReceiver != null){
 
             this.currentReceiver.isCurrentReceiver = false
         }
 
-        this.currentReceiver = this.users.find(user => user.userId == receiverId)
+        this.currentReceiver = this.users.find(user => user.id == receiver)
 
         this.currentReceiver.isCurrentReceiver = true
 
@@ -290,15 +262,15 @@ const chatty = {
 
 
     /* ------------------------------ search user ------------------------------ */
-    searchUser(username){
+    searchUser(email){
 
         const users = []
 
-        if(username.trim() != ""){
+        if(email.trim() != ""){
 
             this.users.forEach(user => {
     
-                if(user.username.includes(username.trim())) users.push(user)
+                if(user.email.includes(email.trim())) users.push(user)
             })
     
             return users

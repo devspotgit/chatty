@@ -20,7 +20,7 @@ function Signup(){
 
         chatty.signup(formData.get("signupEmail"), formData.get("signupPassword"))
         
-        .then(res => {
+        .then(() => {
 
             setLoadingVisibility(false)
 
@@ -28,7 +28,9 @@ function Signup(){
 
             setMessageType("success")
 
-            setPage(res.action)
+            setPage("login")
+
+            return chatty.logout()
         })
         .catch(error =>{
 

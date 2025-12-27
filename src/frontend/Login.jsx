@@ -19,25 +19,11 @@ function Login(){
 
         chatty.login(formData.get("loginEmail"), formData.get("loginPassword"))
 
-        .then(res => {
+        .then(() => {
 
             setLoadingVisibility(false)
-
-            if(!res.data){
-
-                setPage(res.action)
-            }
-            else{
-
-                setCurrentReceiver(res.data.currentReceiver)
-
-                setCurrentUser(res.data.currentUser)
-
-                setUsers(res.data.users)
-
-                setPage(res.action)
-            }
         })
+
         .catch(error => {
 
             setLoadingVisibility(false)
